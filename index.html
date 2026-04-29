@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BELDOR AI — Визуализация покрытия</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:#0a0c0f;
+  --surface:#111418;
+  --card:#181d23;
+  --border:#252b34;
+  --orange:#E63946;
+  --amber:#FF9500;
+  --text:#f0f2f5;
+  --muted:#6b7280;
+  --green:#22c55e;
+  --radius:14px;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Manrope',sans-serif;min-height:100vh}
+
+/* HEADER */
+header{
+  background:linear-gradient(135deg,#0f1318 0%,#141a22 100%);
+  border-bottom:1px solid var(--border);
+  padding:20px 32px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(12px);
+}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;color:var(--orange)}
+.logo span{color:var(--text)}
+.tagline{font-size:13px;color:var(--muted);margin-top:2px}
+
+.header-cta{
+  background:var(--orange);color:#fff;
+  border:none;padding:10px 22px;border-radius:8px;
+  font-family:'Manrope',sans-serif;font-weight:700;font-size:14px;
+  cursor:pointer;transition:all .2s;
+  text-decoration:none;display:inline-block;
+}
+.header-cta:hover{background:#c62d39;transform:translateY(-1px)}
+
+/* LAYOUT */
+.main{max-width:1140px;margin:0 auto;padding:32px 20px}
+
+.hero{text-align:center;margin-bottom:40px}
+.hero h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(36px,6vw,72px);line-height:1;letter-spacing:1px}
+.hero h1 em{color:var(--orange);font-style:normal}
+.hero p{color:var(--muted);margin-top:12px;font-size:15px;max-width:560px;margin-inline:auto}
+
+/* STEPS */
+.steps{display:flex;gap:8px;justify-content:center;margin-bottom:32px;flex-wrap:wrap}
+.step{
+  display:flex;align-items:center;gap:8px;
+  background:var(--card);border:1px solid var(--border);
+  padding:8px 16px;border-radius:40px;font-size:13px;
+}
+.step-num{
+  width:22px;height:22px;border-radius:50%;
+  background:var(--orange);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:11px;flex-shrink:0;
+}
+.step.active .step-num{background:var(--green)}
+.step-arrow{color:var(--muted);font-size:12px}
+
+/* WORKSPACE */
+.workspace{
+  display:grid;
+  grid-template-columns:1fr 340px;
+  gap:20px;
+  align-items:start;
+}
+@media(max-width:820px){.workspace{grid-template-columns:1fr}}
+
+/* CANVAS CARD */
+.canvas-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+
+.canvas-toolbar{
+  padding:14px 18px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+}
+.canvas-toolbar .label{font-size:12px;color:var(--muted);margin-right:4px}
+
+.upload-zone{
+  border:2px dashed var(--border);
+  border-radius:10px;
+  padding:60px 20px;
+  text-align:center;
+  cursor:pointer;
+  transition:all .25s;
+  margin:20px;
+  position:relative;
+}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--orange);background:rgba(230,57,70,0.04)}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.upload-icon{font-size:40px;margin-bottom:12px}
+.upload-zone h3{font-size:16px;font-weight:600;margin-bottom:6px}
+.upload-zone p{font-size:13px;color:var(--muted)}
+
+.canvas-wrapper{
+  position:relative;
+  display:none;
+  background:#000;
+  line-height:0;
+}
+.canvas-wrapper.show{display:block}
+
+#mainCanvas{width:100%;display:block;cursor:crosshair}
+#maskOverlay{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  pointer-events:none;
+  opacity:0.45;
+}
+.result-img{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  object-fit:cover;display:none;
+}
+.result-img.show{display:block}
+
+.generating-overlay{
+  position:absolute;inset:0;
+  background:rgba(10,12,15,0.75);
+  display:none;align-items:center;justify-content:center;
+  flex-direction:column;gap:16px;
+  backdrop-filter:blur(4px);
+}
+.generating-overlay.show{display:flex}
+.spinner{
+  width:48px;height:48px;
+  border:3px solid var(--border);
+  border-top-color:var(--orange);
+  border-radius:50%;
+  animation:spin 0.8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.gen-text{font-size:14px;color:var(--muted)}
+
+/* TOOLS */
+.tool-btn{
+  padding:7px 14px;border:1px solid var(--border);
+  border-radius:8px;cursor:pointer;
+  background:var(--surface);color:var(--text);
+  font-family:'Manrope',sans-serif;font-size:13px;font-weight:500;
+  transition:all .18s;display:inline-flex;align-items:center;gap:6px;
+}
+.tool-btn:hover{background:var(--card);border-color:var(--orange)}
+.tool-btn.active{background:var(--orange);border-color:var(--orange);color:#fff}
+.tool-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* SIZE SLIDER */
+.size-control{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+input[type=range]{
+  -webkit-appearance:none;width:80px;height:4px;
+  background:var(--border);border-radius:2px;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:14px;
+  border-radius:50%;background:var(--orange);cursor:pointer;
+}
+
+/* SIDE PANEL */
+.panel{display:flex;flex-direction:column;gap:16px}
+
+.pcard{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius);padding:18px;
+}
+.pcard h3{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px}
+
+/* COVERAGE SELECTOR */
+.coverage-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cov-btn{
+  border:2px solid var(--border);background:var(--surface);
+  border-radius:10px;padding:12px 8px;cursor:pointer;
+  text-align:center;transition:all .2s;
+}
+.cov-btn:hover{border-color:var(--muted)}
+.cov-btn.active{border-color:var(--orange);background:rgba(230,57,70,0.08)}
+.cov-btn .icon{font-size:24px;margin-bottom:6px}
+.cov-btn .name{font-size:12px;font-weight:600;color:var(--text)}
+.cov-btn .desc{font-size:10px;color:var(--muted);margin-top:2px}
+
+/* AUTO DETECT */
+.auto-btn{
+  width:100%;padding:11px;
+  background:linear-gradient(135deg,#1a2030,#1e2838);
+  border:1px solid #2a4a6a;
+  border-radius:10px;cursor:pointer;
+  color:#60a0d0;font-family:'Manrope',sans-serif;
+  font-size:13px;font-weight:600;
+  transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.auto-btn:hover:not(:disabled){background:linear-gradient(135deg,#1e2a3a,#243048);border-color:#3a6a9a}
+.auto-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* GENERATE BTN */
+.gen-btn{
+  width:100%;padding:14px;
+  background:linear-gradient(135deg,var(--orange),#c62d39);
+  border:none;border-radius:10px;cursor:pointer;
+  color:#fff;font-family:'Manrope',sans-serif;
+  font-size:15px;font-weight:700;letter-spacing:.4px;
+  transition:all .2s;
+  box-shadow:0 4px 20px rgba(230,57,70,0.3);
+}
+.gen-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 28px rgba(230,57,70,0.4)}
+.gen-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* LEAD FORM */
+.lead-inputs{display:flex;flex-direction:column;gap:8px}
+.lead-inputs input,.lead-inputs select{
+  width:100%;padding:10px 14px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);
+  font-family:'Manrope',sans-serif;font-size:14px;
+  transition:border-color .2s;outline:none;
+}
+.lead-inputs input:focus,.lead-inputs select:focus{border-color:var(--orange)}
+.lead-inputs select option{background:var(--surface)}
+
+.lead-btn{
+  width:100%;padding:12px;
+  background:var(--green);border:none;border-radius:8px;
+  color:#000;font-family:'Manrope',sans-serif;font-weight:700;font-size:14px;
+  cursor:pointer;transition:all .2s;margin-top:4px;
+}
+.lead-btn:hover{background:#16a34a}
+
+.social-row{display:flex;gap:8px;margin-top:8px}
+.social-btn{
+  flex:1;padding:10px 8px;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface);color:var(--text);cursor:pointer;
+  font-family:'Manrope',sans-serif;font-size:12px;font-weight:600;
+  transition:all .2s;text-align:center;
+}
+.social-btn.wa{border-color:#25d366;color:#25d366}
+.social-btn.wa:hover{background:rgba(37,211,102,0.08)}
+.social-btn.tg{border-color:#0088cc;color:#0088cc}
+.social-btn.tg:hover{background:rgba(0,136,204,0.08)}
+
+/* STATUS BAR */
+.status-bar{
+  padding:10px 18px;
+  border-top:1px solid var(--border);
+  font-size:12px;color:var(--muted);
+  display:flex;align-items:center;justify-content:space-between;
+  min-height:40px;
+}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);margin-right:6px;display:inline-block}
+.status-dot.ok{background:var(--green)}
+.status-dot.err{background:var(--orange)}
+.status-dot.pulse{background:var(--amber);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* RESULT ACTIONS */
+.result-actions{
+  display:none;flex-direction:column;gap:8px;
+}
+.result-actions.show{display:flex}
+.dl-btn{
+  width:100%;padding:10px;border-radius:8px;
+  border:1px solid var(--border);background:var(--surface);
+  color:var(--text);font-family:'Manrope',sans-serif;font-size:13px;font-weight:600;
+  cursor:pointer;transition:all .2s;
+}
+.dl-btn:hover{border-color:var(--amber);color:var(--amber)}
+
+/* TOAST */
+.toast{
+  position:fixed;bottom:30px;right:24px;
+  background:#1f2937;border:1px solid var(--border);
+  padding:12px 20px;border-radius:10px;font-size:13px;
+  opacity:0;transform:translateY(10px);
+  transition:all .3s;pointer-events:none;z-index:999;
+}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.success{border-color:var(--green);color:var(--green)}
+.toast.error{border-color:var(--orange);color:var(--orange)}
+
+/* FOOTER */
+footer{text-align:center;padding:32px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:60px}
+footer a{color:var(--orange);text-decoration:none}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">BEL<span>DOR</span> <span style="color:var(--amber);font-size:20px">AI</span></div>
+    <div class="tagline">Визуализация асфальта и плитки за 10 секунд</div>
+  </div>
+  <a href="https://bel-dor.ru" class="header-cta" target="_blank">Вызвать замерщика</a>
+</header>
+
+<div class="main">
+
+  <div class="hero">
+    <h1>Увидьте результат<br><em>до начала работ</em></h1>
+    <p>Загрузите фото участка — ИИ автоматически определит зону и покажет, как будет выглядеть асфальт или плитка</p>
+  </div>
+
+  <div class="steps">
+    <div class="step" id="s1"><span class="step-num">1</span> Загрузить фото</div>
+    <div class="step-arrow">→</div>
+    <div class="step" id="s2"><span class="step-num">2</span> Отметить зону</div>
+    <div class="step-arrow">→</div>
+    <div class="step" id="s3"><span class="step-num">3</span> Выбрать покрытие</div>
+    <div class="step-arrow">→</div>
+    <div class="step" id="s4"><span class="step-num">4</span> Генерация</div>
+  </div>
+
+  <div class="workspace">
+
+    <!-- CANVAS AREA -->
+    <div class="canvas-card">
+
+      <div class="canvas-toolbar" id="toolbar" style="display:none">
+        <span class="label">Инструмент:</span>
+        <button class="tool-btn active" id="drawBtn" onclick="setTool('draw')">✏️ Рисовать</button>
+        <button class="tool-btn" id="eraseBtn" onclick="setTool('erase')">⌫ Стереть</button>
+        <button class="tool-btn" onclick="clearMask()">🗑 Сбросить</button>
+        <div class="size-control">
+          <span>Размер:</span>
+          <input type="range" id="brushSize" min="5" max="60" value="20">
+          <span id="brushVal">20</span>
+        </div>
+      </div>
+
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept="image/*" onchange="loadImage(event)">
+        <div class="upload-icon">📸</div>
+        <h3>Загрузите фото участка</h3>
+        <p>JPG / PNG до 10 МБ<br>Дорожка, двор, парковка, въезд</p>
+      </div>
+
+      <div class="canvas-wrapper" id="canvasWrapper">
+        <canvas id="mainCanvas"></canvas>
+        <canvas id="maskOverlay"></canvas>
+        <img id="resultImg" class="result-img">
+        <div class="generating-overlay" id="genOverlay">
+          <div class="spinner"></div>
+          <div class="gen-text" id="genText">Генерация изображения...</div>
+        </div>
+      </div>
+
+      <div class="status-bar">
+        <div>
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Загрузите фото для начала работы</span>
+        </div>
+        <span id="maskInfo"></span>
+      </div>
+    </div>
+
+    <!-- SIDE PANEL -->
+    <div class="panel">
+
+      <!-- COVERAGE TYPE -->
+      <div class="pcard">
+        <h3>Тип покрытия</h3>
+        <div class="coverage-grid">
+          <div class="cov-btn active" id="cov-asphalt" onclick="setCoverage('asphalt')">
+            <div class="icon">🚗</div>
+            <div class="name">Асфальт</div>
+            <div class="desc">Гладкий, прочный</div>
+          </div>
+          <div class="cov-btn" id="cov-tiles" onclick="setCoverage('tiles')">
+            <div class="icon">🧱</div>
+            <div class="name">Брусчатка</div>
+            <div class="desc">Вибролитая плитка</div>
+          </div>
+          <div class="cov-btn" id="cov-concrete" onclick="setCoverage('concrete')">
+            <div class="icon">⬜</div>
+            <div class="name">Бетон</div>
+            <div class="desc">Монолитный</div>
+          </div>
+          <div class="cov-btn" id="cov-gravel" onclick="setCoverage('gravel')">
+            <div class="icon">🪨</div>
+            <div class="name">Щебень</div>
+            <div class="desc">Декоративный</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ZONE DETECTION -->
+      <div class="pcard">
+        <h3>Зона нанесения</h3>
+        <button class="auto-btn" id="autoBtn" onclick="autoDetect()" disabled>
+          🤖 Автоопределить зону (ИИ)
+        </button>
+        <p style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center">или нарисуйте зону вручную на фото</p>
+      </div>
+
+      <!-- GENERATE -->
+      <div class="pcard">
+        <h3>Генерация</h3>
+        <button class="gen-btn" id="genBtn" onclick="generate()" disabled>
+          ⚡ Визуализировать
+        </button>
+        <div class="result-actions" id="resultActions">
+          <button class="dl-btn" onclick="downloadResult()">💾 Скачать результат</button>
+          <button class="dl-btn" onclick="resetResult()">↺ Попробовать снова</button>
+        </div>
+      </div>
+
+      <!-- LEAD FORM -->
+      <div class="pcard">
+        <h3>Получить расчёт стоимости</h3>
+        <div class="lead-inputs">
+          <input id="leadName" placeholder="Ваше имя *" type="text">
+          <input id="leadPhone" placeholder="+7 (___) ___-__-__" type="tel" oninput="phoneMask(this)">
+          <input id="leadArea" placeholder="Площадь (м²)" type="number" min="1">
+          <select id="leadCity">
+            <option value="">Город / район</option>
+            <option>Чехов</option>
+            <option>Серпухов</option>
+            <option>Подольск</option>
+            <option>Домодедово</option>
+            <option>Ступино</option>
+            <option>Москва</option>
+            <option>Другой</option>
+          </select>
+          <button class="lead-btn" onclick="sendLead()">📋 Получить расчёт</button>
+        </div>
+        <div class="social-row">
+          <button class="social-btn wa" onclick="openWA()">WhatsApp</button>
+          <button class="social-btn tg" onclick="openTG()">Telegram</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  © 2025 BELDOR — Асфальтирование и благоустройство · 
+  <a href="https://bel-dor.ru">bel-dor.ru</a> · 
+  Чехов, Серпухов, Подольск, Домодедово, Ступино, Москва
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────
+const state = {
+  imageLoaded: false,
+  tool: 'draw',
+  coverage: 'asphalt',
+  brushSize: 20,
+  drawing: false,
+  originalImage: null,
+  resultBlob: null,
+  maskPixels: 0,
+};
+
+// ─── ELEMENTS ────────────────────────────────────────────
+const mainCanvas = document.getElementById('mainCanvas');
+const ctx = mainCanvas.getContext('2d');
+const maskCanvas = document.getElementById('maskOverlay');
+const mctx = maskCanvas.getContext('2d');
+const resultImg = document.getElementById('resultImg');
+const genOverlay = document.getElementById('genOverlay');
+const genText = document.getElementById('genText');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const maskInfo = document.getElementById('maskInfo');
+const brushSize = document.getElementById('brushSize');
+const brushVal = document.getElementById('brushVal');
+
+// ─── UPLOAD ──────────────────────────────────────────────
+const uploadZone = document.getElementById('uploadZone');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) loadImageFile(file);
+});
+
+function loadImage(event) {
+  const file = event.target.files[0];
+  if (file) loadImageFile(file);
+}
+
+function loadImageFile(file) {
+  if (file.size > 10 * 1024 * 1024) { showToast('Файл слишком большой (макс 10 МБ)', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      // Fit to max width 960px keeping aspect
+      const MAX = 960;
+      let w = img.width, h = img.height;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+
+      mainCanvas.width = maskCanvas.width = w;
+      mainCanvas.height = maskCanvas.height = h;
+
+      ctx.drawImage(img, 0, 0, w, h);
+      mctx.clearRect(0, 0, w, h);
+
+      state.originalImage = img;
+      state.imageLoaded = true;
+      state.resultBlob = null;
+
+      uploadZone.style.display = 'none';
+      document.getElementById('canvasWrapper').classList.add('show');
+      document.getElementById('toolbar').style.display = 'flex';
+      document.getElementById('autoBtn').disabled = false;
+      document.getElementById('genBtn').disabled = false;
+
+      resultImg.classList.remove('show');
+      document.getElementById('resultActions').classList.remove('show');
+
+      setStatus('ok', 'Фото загружено. Нарисуйте зону или нажмите Автоопределить');
+      setStep(2);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ─── CANVAS DRAWING ──────────────────────────────────────
+function getCanvasPos(e) {
+  const rect = mainCanvas.getBoundingClientRect();
+  const scaleX = mainCanvas.width / rect.width;
+  const scaleY = mainCanvas.height / rect.height;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return {
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top) * scaleY,
+  };
+}
+
+function paintBrush(x, y) {
+  const r = state.brushSize;
+  if (state.tool === 'draw') {
+    mctx.globalCompositeOperation = 'source-over';
+    mctx.fillStyle = 'rgba(230,57,70,0.55)';
+  } else {
+    mctx.globalCompositeOperation = 'destination-out';
+    mctx.fillStyle = 'rgba(0,0,0,1)';
+  }
+  mctx.beginPath();
+  mctx.arc(x, y, r, 0, Math.PI * 2);
+  mctx.fill();
+  updateMaskInfo();
+}
+
+function onPointerDown(e) {
+  e.preventDefault();
+  state.drawing = true;
+  paintBrush(...Object.values(getCanvasPos(e)));
+}
+function onPointerMove(e) {
+  e.preventDefault();
+  if (!state.drawing) return;
+  paintBrush(...Object.values(getCanvasPos(e)));
+}
+function onPointerUp() { state.drawing = false; }
+
+mainCanvas.addEventListener('mousedown', onPointerDown);
+mainCanvas.addEventListener('mousemove', onPointerMove);
+mainCanvas.addEventListener('mouseup', onPointerUp);
+mainCanvas.addEventListener('mouseleave', onPointerUp);
+mainCanvas.addEventListener('touchstart', onPointerDown, { passive: false });
+mainCanvas.addEventListener('touchmove', onPointerMove, { passive: false });
+mainCanvas.addEventListener('touchend', onPointerUp);
+
+brushSize.addEventListener('input', () => {
+  state.brushSize = +brushSize.value;
+  brushVal.textContent = brushSize.value;
+});
+
+function setTool(t) {
+  state.tool = t;
+  document.getElementById('drawBtn').classList.toggle('active', t === 'draw');
+  document.getElementById('eraseBtn').classList.toggle('active', t === 'erase');
+}
+
+function clearMask() {
+  mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+  updateMaskInfo();
+}
+
+function updateMaskInfo() {
+  const d = mctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
+  let count = 0;
+  for (let i = 3; i < d.length; i += 4) if (d[i] > 30) count++;
+  state.maskPixels = count;
+  const pct = Math.round(count / (maskCanvas.width * maskCanvas.height) * 100);
+  maskInfo.textContent = pct > 0 ? `Закрашено: ~${pct}%` : '';
+}
+
+// ─── AUTO DETECT ─────────────────────────────────────────
+async function autoDetect() {
+  if (!state.imageLoaded) return;
+  const btn = document.getElementById('autoBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Анализирую...';
+  setStatus('pulse', 'ИИ определяет зону покрытия...');
+
+  try {
+    // Send to Claude API for zone detection
+    const imageData = mainCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: 'image/jpeg', data: imageData }
+            },
+            {
+              type: 'text',
+              text: `Analyze this photo and identify the main ground surface area (driveway, yard, parking, path) that could be paved.
+Return ONLY a JSON object with these fields (no markdown, no explanation):
+{
+  "zones": [
+    { "cx": 0.5, "cy": 0.6, "rx": 0.4, "ry": 0.25, "angle": 0 }
+  ],
+  "scene": "driveway|yard|parking|path|mixed",
+  "confidence": 0.8
+}
+Where cx/cy are ellipse center (0-1 normalized), rx/ry are radii (0-1), angle is degrees rotation.
+Provide 1-3 zones covering the main pavement area. Be generous with coverage.`
+            }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    const text = data.content?.find(b => b.type === 'text')?.text || '';
+    const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+
+    // Draw detected zones on mask
+    mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    mctx.globalCompositeOperation = 'source-over';
+
+    const W = maskCanvas.width, H = maskCanvas.height;
+
+    for (const zone of parsed.zones || []) {
+      mctx.save();
+      mctx.translate(zone.cx * W, zone.cy * H);
+      mctx.rotate((zone.angle || 0) * Math.PI / 180);
+
+      const grad = mctx.createRadialGradient(0, 0, 0, 0, 0, zone.rx * W);
+      grad.addColorStop(0, 'rgba(230,57,70,0.7)');
+      grad.addColorStop(0.7, 'rgba(230,57,70,0.5)');
+      grad.addColorStop(1, 'rgba(230,57,70,0)');
+
+      mctx.scale(1, (zone.ry * H) / (zone.rx * W));
+      mctx.fillStyle = grad;
+      mctx.beginPath();
+      mctx.arc(0, 0, zone.rx * W, 0, Math.PI * 2);
+      mctx.fill();
+      mctx.restore();
+    }
+
+    updateMaskInfo();
+    setStatus('ok', `Зона определена (${parsed.scene || 'участок'}). Готово к генерации!`);
+    setStep(3);
+    showToast('✅ Зона автоопределена', 'success');
+  } catch (err) {
+    console.error(err);
+    setStatus('err', 'Не удалось определить зону — нарисуйте вручную');
+    showToast('Нарисуйте зону вручную', 'error');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '🤖 Автоопределить зону (ИИ)';
+}
+
+// ─── COVERAGE ────────────────────────────────────────────
+function setCoverage(type) {
+  state.coverage = type;
+  document.querySelectorAll('.cov-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('cov-' + type).classList.add('active');
+  setStep(3);
+}
+
+const PROMPTS = {
+  asphalt: 'professional fresh black asphalt pavement, smooth bituminous surface, realistic road construction, high contrast edges, photorealistic 8k',
+  tiles:   'professional grey concrete paving stones, interlocking brick pattern, vibropressed pavers, sharp edges, photorealistic 8k',
+  concrete: 'smooth grey reinforced concrete surface, monolithic slab, construction grade, realistic texture, photorealistic 8k',
+  gravel:  'decorative crushed stone gravel driveway, beige limestone aggregate, well-maintained surface, photorealistic 8k',
+};
+
+// ─── GENERATE ────────────────────────────────────────────
+async function generate() {
+  if (!state.imageLoaded) { showToast('Сначала загрузите фото', 'error'); return; }
+
+  // Check mask has pixels
+  const maskData = mctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
+  let hasMask = false;
+  for (let i = 3; i < maskData.length; i += 4) { if (maskData[i] > 30) { hasMask = true; break; } }
+  if (!hasMask) { showToast('Отметьте зону на фото', 'error'); return; }
+
+  genOverlay.classList.add('show');
+  setStatus('pulse', 'Генерация... обычно 15–30 секунд');
+  setStep(4);
+  document.getElementById('genBtn').disabled = true;
+
+  // Build white mask (required for inpainting)
+  const whiteMaskCanvas = document.createElement('canvas');
+  whiteMaskCanvas.width = maskCanvas.width;
+  whiteMaskCanvas.height = maskCanvas.height;
+  const wm = whiteMaskCanvas.getContext('2d');
+  wm.fillStyle = 'black';
+  wm.fillRect(0, 0, whiteMaskCanvas.width, whiteMaskCanvas.height);
+  wm.globalCompositeOperation = 'source-over';
+  // Copy mask — where red overlay is, paint white
+  const md = mctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+  const wd = wm.createImageData(whiteMaskCanvas.width, whiteMaskCanvas.height);
+  for (let i = 0; i < md.data.length; i += 4) {
+    const alpha = md.data[i + 3];
+    const v = alpha > 30 ? 255 : 0;
+    wd.data[i] = wd.data[i+1] = wd.data[i+2] = v;
+    wd.data[i+3] = 255;
+  }
+  wm.putImageData(wd, 0, 0);
+
+  const imageB64 = mainCanvas.toDataURL('image/png').split(',')[1];
+  const maskB64  = whiteMaskCanvas.toDataURL('image/png').split(',')[1];
+  const prompt   = PROMPTS[state.coverage];
+
+  const steps = [
+    'Анализирую изображение...',
+    'Подбираю текстуру покрытия...',
+    'Генерирую визуализацию...',
+    'Финальная обработка...',
+  ];
+  let si = 0;
+  const stepTimer = setInterval(() => {
+    genText.textContent = steps[Math.min(si++, steps.length - 1)];
+  }, 5000);
+
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: imageB64, mask: maskB64, prompt }),
+    });
+
+    clearInterval(stepTimer);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+
+    const blob = await res.blob();
+    state.resultBlob = blob;
+    const url = URL.createObjectURL(blob);
+    resultImg.src = url;
+    resultImg.classList.add('show');
+    document.getElementById('resultActions').classList.add('show');
+
+    setStatus('ok', 'Готово! Нравится результат? Оставьте заявку →');
+    showToast('✅ Визуализация готова!', 'success');
+  } catch (err) {
+    console.error(err);
+    setStatus('err', 'Ошибка генерации: ' + err.message);
+    showToast('Ошибка: ' + err.message, 'error');
+    clearInterval(stepTimer);
+  }
+
+  genOverlay.classList.remove('show');
+  document.getElementById('genBtn').disabled = false;
+}
+
+function downloadResult() {
+  if (!state.resultBlob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(state.resultBlob);
+  a.download = `beldor-${state.coverage}-visualization.png`;
+  a.click();
+}
+
+function resetResult() {
+  resultImg.classList.remove('show');
+  state.resultBlob = null;
+  document.getElementById('resultActions').classList.remove('show');
+  clearMask();
+  setStatus('ok', 'Нарисуйте новую зону и нажмите Визуализировать');
+}
+
+// ─── LEAD ────────────────────────────────────────────────
+function phoneMask(input) {
+  let v = input.value.replace(/\D/g, '');
+  if (v.startsWith('8')) v = '7' + v.slice(1);
+  if (v.startsWith('7')) {
+    input.value = '+7 (' + v.slice(1,4) + (v.length>4?') '+v.slice(4,7):'') + (v.length>7?'-'+v.slice(7,9):'') + (v.length>9?'-'+v.slice(9,11):'');
+  }
+}
+
+async function sendLead() {
+  const name  = document.getElementById('leadName').value.trim();
+  const phone = document.getElementById('leadPhone').value.trim();
+  const area  = document.getElementById('leadArea').value;
+  const city  = document.getElementById('leadCity').value;
+
+  if (!name) { showToast('Введите имя', 'error'); return; }
+  if (phone.replace(/\D/g,'').length < 11) { showToast('Введите корректный телефон', 'error'); return; }
+
+  try {
+    await fetch('/api/lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, phone, area, city, coverage: state.coverage, source: 'ai-visualizer' }),
+    });
+    showToast('✅ Заявка принята! Перезвоним скоро', 'success');
+    document.getElementById('leadName').value = '';
+    document.getElementById('leadPhone').value = '';
+    document.getElementById('leadArea').value = '';
+  } catch {
+    showToast('Ошибка отправки — позвоните нам', 'error');
+  }
+}
+
+function openWA() { window.open('https://wa.me/79990000000?text=Хочу+расчёт+стоимости+асфальтирования', '_blank'); }
+function openTG() { window.open('https://t.me/beldor_bot', '_blank'); }
+
+// ─── UI HELPERS ──────────────────────────────────────────
+function setStatus(type, text) {
+  statusDot.className = 'status-dot ' + type;
+  statusText.textContent = text;
+}
+
+function setStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById('s' + i);
+    if (el) el.classList.toggle('active', i <= n);
+  }
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3500);
+}
+</script>
+
+</body>
+</html>

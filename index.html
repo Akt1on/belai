@@ -742,8 +742,8 @@ async function generate() {
   }
   wm.putImageData(wd, 0, 0);
 
-  const imageB64 = mainCanvas.toDataURL('image/png').split(',')[1];
-  const maskB64  = whiteMaskCanvas.toDataURL('image/png').split(',')[1];
+  const imageB64 = mainCanvas.toDataURL('image/jpeg', 0.5).split(',')[1];
+  const maskB64  = whiteMaskCanvas.toDataURL('image/jpeg', 0.5).split(',')[1];
   const prompt   = PROMPTS[state.coverage];
 
   const steps = [

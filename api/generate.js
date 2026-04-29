@@ -17,7 +17,7 @@
 export const config = { maxDuration: 60 };   // allow up to 60s (Vercel Pro) / 10s (Hobby)
 
 const MODEL_URL =
-  "https://api-inference.huggingface.co/models/stable-diffusion-v1-5/stable-diffusion-inpainting";
+  "https://api-inference.huggingface.co/models/sd2-community/stable-diffusion-2-inpainting";
 
 const NEGATIVE_PROMPT =
   "blurry, low quality, unrealistic, cartoon, painting, artifacts, deformed, watermark, text";
